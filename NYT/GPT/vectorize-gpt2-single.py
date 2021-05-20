@@ -26,12 +26,16 @@ seed = 42
 # tokenizing
 train_size = None  # None for full dataset
 test_size = None  # None for full dataset
+cutoff_end_chars = None # None for full articles
+
+tokenized_train_path = 'train_tokenized_FULL.pt'
+tokenized_test_path = 'test_tokenized_FULL.pt'
 
 # vectorizing
 print('args', sys.argv)
 
 MODEL = sys.argv[1] if len(sys.argv) >= 2 else 'gpt2'
-batch_size = 16
+batch_size = 8
 chunk_size = int(sys.argv[2]) if len(sys.argv) >= 3 else 200_000
 
 print_f(f'Model: {MODEL} | Chunk size: {chunk_size} | Train limit: {train_size} | Test limit: {test_size} | Seed: {seed}')
@@ -107,9 +111,6 @@ class NYTDataset(Dataset):
 
 print_f('Loading NYT dataset...')
 
-tokenized_train_path = 'train_tokenized_FULL.pt'
-tokenized_test_path = 'test_tokenized_FULL.pt'
-
 # train and test data labels are coded in numbers,
 # but the models predict human-readable labels,
 # so we need to re-map these. 
@@ -127,7 +128,7 @@ if not os.path.exists(tokenized_train_path):
 
     random.Random(seed).shuffle(train_data)
     # extract actual article texts from data samples
-    train_articles = [d[2] for d in train_data] 
+    train_articles = [d[2][:cutoff_end_chars] for d in train_data] 
     # map the number-coded labels to human-readable labels
     train_labels_lists = [list(map(tags_dict.get, d[3:])) for d in train_data]
 
@@ -150,7 +151,7 @@ if not os.path.exists(tokenized_test_path):
     
     random.Random(seed).shuffle(test_data)
     # extract actual article texts from data samples
-    test_articles = [d[2] for d in test_data]
+    test_articles = [d[2][:cutoff_end_chars] for d in test_data]
     # map the number-coded labels to human-readable labels
     test_labels_lists = [list(map(tags_dict.get, d[3:])) for d in test_data]
 
@@ -208,9 +209,9 @@ for dataset, output_path in runs:
 
         print_f('dataset original', len(dataset))
 
-        dataset.input_ids = dataset.input_ids[skip_n_articles-1:]
-        dataset.attention_mask = dataset.attention_mask[skip_n_articles-1:]
-        dataset.labels = dataset.labels[skip_n_articles-1:]
+        dataset.input_ids = dataset.input_ids[skip_n_articles:]
+        dataset.attention_mask = dataset.attention_mask[skip_n_articles:]
+        dataset.labels = dataset.labels[skip_n_articles:]
 
         print_f('dataset after skipping', len(dataset))
 
@@ -247,6 +248,7 @@ for dataset, output_path in runs:
         y_train += labels.detach().cpu()
 
         if len(X_train) >= chunk_size:
+            print_f(f'Saving chunk: {output_path}_chunk{chunk_id}of{total_chunks}.pt')
             saved_dataset = GPTEmbeddedDataset(torch.stack(X_train), torch.stack(y_train))
             torch.save(saved_dataset, f'{output_path}_chunk{chunk_id}of{total_chunks}.pt', pickle_protocol=4)
             X_train = []
@@ -255,6 +257,7 @@ for dataset, output_path in runs:
 
     # take care of what's left after loop
     if len(X_train) >= 0:
+        print_f(f'Saving chunk: {output_path}_chunk{chunk_id}of{total_chunks}.pt')
         saved_dataset = GPTEmbeddedDataset(torch.stack(X_train), torch.stack(y_train))
         torch.save(saved_dataset, f'{output_path}_chunk{chunk_id}of{total_chunks}.pt', pickle_protocol=4)
   
