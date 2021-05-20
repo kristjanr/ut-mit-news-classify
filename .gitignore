@@ -1,5 +1,9 @@
 # custom
 data
+vectorized
+tokenized
+models
+wandb
 *.out
 *.pid
 
