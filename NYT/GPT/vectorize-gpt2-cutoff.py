@@ -1,6 +1,6 @@
 import os
 import sys
-module_path = "/gpfs/space/home/mykyta/nlp/ut-mit-news-classify/NYT/"
+module_path = "/gpfs/space/home/roosild/ut-mit-news-classify/NYT/"
 if module_path not in sys.path:
     sys.path.append(module_path)
 from torch.utils.data import DataLoader
@@ -14,23 +14,53 @@ print_f('All imports seem good!')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print_f('Using device:', device)
 
+import time
+
+tic = time.perf_counter()
 
 MODEL = 'gpt2'
 batch_size = 16
 chunk_size = 200_000
 
-tokenized_train_path = f'tokenized/train_150k_min500_complete.pt'
-tokenized_test_path = f'tokenized/test_150k_min500_complete.pt'
+# change this for each chunk
+NR = 1
+cutoff_end_chars = False 
+
+
+import os
+tokenized_directory = '/gpfs/space/projects/stud_nlp_share/cutoff/GPT/tokenized/'
+
+def is_correct_chunk(filename):
+    if cutoff_end_chars and 'cutoff' in filename or not cutoff_end_chars and 'complete' in filename:
+        chunk_nr = filename.split('chunk')[1].split('of')[0]
+        return NR == int(chunk_nr)
+    return False
+
+filenames = os.listdir(tokenized_directory)
+
+for filename in filenames:
+    if is_correct_chunk(filename):
+        if 'train' in filename:
+            tokenized_train_filename = filename
+        else:
+            tokenized_test_filename = filename
+        
+tokenized_train_path = tokenized_directory + tokenized_train_filename
+tokenized_test_path = tokenized_directory + tokenized_test_filename
+
+print_f('Loading tokenized dataset...')
+
+train_dataset = torch.load(tokenized_train_path)
+print_f(f'Loaded {tokenized_train_path}')
+
+test_dataset = torch.load(tokenized_test_path)
+print_f(f'Loaded {tokenized_test_path}')
+
 
 os.makedirs('vectorized', exist_ok=True)
 
-vectorized_train_path = f'vectorized/train_150k_min500_complete_slurm.pt'
-vectorized_test_path = f'vectorized/test_150k_min500_complete_slurm.pt'
-
-print_f('Loading vectorized dataset...')
-
-train_dataset = torch.load(tokenized_train_path)
-test_dataset = torch.load(tokenized_test_path)
+vectorized_train_path = f'/gpfs/space/projects/stud_nlp_share/cutoff/GPT/vectorized/{tokenized_train_filename}'
+vectorized_test_path = f'/gpfs/space/projects/stud_nlp_share/cutoff/GPT/vectorized/{tokenized_test_filename}'
 
 # start actual vectorization with GPT2
 runs = [(train_dataset, vectorized_train_path), (test_dataset, vectorized_test_path)]
@@ -128,4 +158,5 @@ for dataset, output_path in runs:
         saved_dataset = GPTVectorizedDataset(torch.stack(X_train), torch.stack(y_train))
         torch.save(saved_dataset, output_path, pickle_protocol=4)
 
-print_f('All done!')
+toc = time.perf_counter()
+print_f(f'Done in {toc - tic:0.4f} seconds!')

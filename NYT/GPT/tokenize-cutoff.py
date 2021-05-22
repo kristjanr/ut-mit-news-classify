@@ -1,6 +1,6 @@
 import os
 import sys
-module_path = "/gpfs/space/home/roosild/ut-mit-news-classify/NYT/utils.py"
+module_path = "/gpfs/space/home/roosild/ut-mit-news-classify/NYT/"
 if module_path not in sys.path:
     sys.path.append(module_path)
 from torch.utils.data import DataLoader
@@ -14,33 +14,34 @@ print_f('All imports seem good!')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print_f('Using device:', device)
 
-cutoff_end_chars = True 
-
-
 
 ########################
 # LOAD DATA
 ########################
 
-TOTAL_NR_OF_CHUNKS = 4000
+TOTAL_NR_OF_CHUNKS = 4
 
 ## change this for each chunk
-NR = 1
+NR = 4
+
+## change this for non-cutoff data
+cutoff_end_chars = True 
 
 
 print_f('Loading NYT dataset...')
 
 train_articles, train_labels_lists, test_articles, test_labels_lists = load_nyt_data(min_len=500, cutoff_tags=cutoff_end_chars)
 
-print_f('Splitting to 4 chunks and processing chunk nr {NR}')
+print_f(f'Splitting to {TOTAL_NR_OF_CHUNKS} chunks and processing chunk nr {NR}')
 
+size_str = f'{len(train_articles)//1000}k'
 
 train_articles = split_to_n_chunks(train_articles, TOTAL_NR_OF_CHUNKS)[NR-1]
 train_labels_lists = split_to_n_chunks(train_labels_lists, TOTAL_NR_OF_CHUNKS)[NR-1]
 test_articles = split_to_n_chunks(test_articles, TOTAL_NR_OF_CHUNKS)[NR-1]
 test_labels_lists = split_to_n_chunks(test_labels_lists, TOTAL_NR_OF_CHUNKS)[NR-1]
 
-size_str = f'{len(train_articles)//1000}k'
+print_f(f'There are {len(train_articles)} articles in this chunk')
 
 if cutoff_end_chars:
     ending = 'min500_cutoff_replace'
@@ -66,6 +67,10 @@ MODEL = 'gpt2'
 tokenizer = GPT2TokenizerFast.from_pretrained(MODEL)
 tokenizer.pad_token = tokenizer.eos_token
 
+import time
+
+tic = time.perf_counter()
+
 if not os.path.exists(train_path):
     print_f('Tokenizing train dataset...')
     train_dataset = GPTTokenizedDataset(train_articles, train_labels_lists, tokenizer)
@@ -86,3 +91,6 @@ if not os.path.exists(test_path):
 else:
     print_f('Found tokenized training set...')
     test_dataset = torch.load(test_path)
+
+toc = time.perf_counter()
+print_f(f'Done tokenization part in {toc - tic:0.4f} seconds!')

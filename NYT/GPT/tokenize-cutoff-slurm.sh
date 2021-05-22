@@ -2,7 +2,7 @@
 
 # Job Details
 #SBATCH --partition=gpu
-#SBATCH -J gpt2_emb
+#SBATCH -J gpt-t-4
 
 # Resources
 #SBATCH -t 06:45:00
@@ -10,9 +10,9 @@
 #SBATCH --mem=24G
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:tesla:1
-#SBATCH -o ./slurm/log-%j.out # STDOUT
+#SBATCH -o /gpfs/space/home/roosild/.slurm/log-%j.out # STDOUT
 
 # Actual job command(s)
-srun python tokenize-cutoff.py "$@"
+srun python tokenize-cutoff.py
 
 

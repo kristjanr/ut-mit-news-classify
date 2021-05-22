@@ -57,12 +57,12 @@ def load_nyt_data(min_len=None, cutoff_tags=False):
     # but the models predict human-readable labels,
     # so we need to re-map these.
     # Let's use one of the files downloaded by the mitnewsclassify package
-    with open('../data/nyt-theme-tags.csv', newline='') as csvfile:
+    with open('/gpfs/space/projects/stud_nlp_share/data/nyt-theme-tags.csv', newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         tags_dict = {row['tags_id']: row['tag'] for row in reader}
 
     # open the train data given to us by Max
-    with gzip.open('../data/NYTcorpus_train.p.gz', mode='r') as f:
+    with gzip.open('/gpfs/space/projects/stud_nlp_share/data/NYTcorpus_train.p.gz', mode='r') as f:
         train_data = pickle.load(f)
     print_f('Train data loaded.')
 
@@ -72,7 +72,7 @@ def load_nyt_data(min_len=None, cutoff_tags=False):
     train_labels_lists = [list(map(tags_dict.get, d[3:])) for d in train_data]
 
     # open the test data given to us by Max
-    with gzip.open('../data/NYTcorpus_test.p.gz', mode='r') as f:
+    with gzip.open('/gpfs/space/projects/stud_nlp_share/data/NYTcorpus_test.p.gz', mode='r') as f:
         test_data = pickle.load(f)
     print_f('Test data loaded.')
 
@@ -122,7 +122,7 @@ def load_label_map(out2id_path, id2label_path):
     return out2label
 
 
-out2label = load_label_map('../data/labels_dict_gpt.csv', '../data/nyt-theme-tags.csv')
+out2label = load_label_map('/gpfs/space/projects/stud_nlp_share/data/labels_dict_gpt.csv', '/gpfs/space/projects/stud_nlp_share/data/nyt-theme-tags.csv')
 mlb = MultiLabelBinarizer(classes=out2label)
 mlb.fit(out2label)
 
@@ -136,11 +136,14 @@ def vec2labels(vec):
 
 
 def split_to_n_chunks(dataset, n=4):
-    chunks_starts_and_ends = [(size//4*(i-1), size//4*i) for i in range(1,5)]
-    chunks_starts_and_ends[3] = (chunks_starts_and_ends[3][0], size)
+    size = len(dataset)
+    start_and_end_indices = [(size//n*(i-1), size//n*i) for i in range(1,n+1)]
+    
+    # take care of the end index of the last chunk in case dataset size did not divide by n
+    start_and_end_indices[n-1] = (start_and_end_indices[n-1][0], size)
 
     chunks = []
-    for i, (start, end) in enumerate(chunks_starts_and_ends):
+    for start, end in start_and_end_indices:
         chunks.append(dataset[start:end])
     return chunks
     
