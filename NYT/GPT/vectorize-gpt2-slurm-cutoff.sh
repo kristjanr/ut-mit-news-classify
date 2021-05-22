@@ -7,7 +7,7 @@
 # Resources
 #SBATCH -t 06:45:00
 #SBATCH --ntasks=1
-#SBATCH --mem=24G
+#SBATCH --mem=40G
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:tesla:1
 #SBATCH -o /gpfs/space/home/roosild/.slurm/log-%j.out # STDOUT

@@ -24,7 +24,7 @@ chunk_size = 200_000
 
 # change this for each chunk
 NR = 1
-cutoff_end_chars = False 
+cutoff_end_chars = True 
 
 
 import os

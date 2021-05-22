@@ -8,7 +8,7 @@ import torch
 import os
 from tqdm.auto import tqdm
 from utils import print_f, load_nyt_data, split_to_n_chunks
-
+import gc
 
 print_f('All imports seem good!')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,6 +40,8 @@ train_articles = split_to_n_chunks(train_articles, TOTAL_NR_OF_CHUNKS)[NR-1]
 train_labels_lists = split_to_n_chunks(train_labels_lists, TOTAL_NR_OF_CHUNKS)[NR-1]
 test_articles = split_to_n_chunks(test_articles, TOTAL_NR_OF_CHUNKS)[NR-1]
 test_labels_lists = split_to_n_chunks(test_labels_lists, TOTAL_NR_OF_CHUNKS)[NR-1]
+
+gc.collect()
 
 print_f(f'There are {len(train_articles)} articles in this chunk')
 
