@@ -133,3 +133,14 @@ def labels2vec(labels):
 
 def vec2labels(vec):
     return mlb.inverse_transform(vec)
+
+
+def split_to_n_chunks(dataset, n=4):
+    chunks_starts_and_ends = [(size//4*(i-1), size//4*i) for i in range(1,5)]
+    chunks_starts_and_ends[3] = (chunks_starts_and_ends[3][0], size)
+
+    chunks = []
+    for i, (start, end) in enumerate(chunks_starts_and_ends):
+        chunks.append(dataset[start:end])
+    return chunks
+    
