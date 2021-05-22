@@ -15,8 +15,7 @@ schedule_trainer() {
 
     # let's schedule next job
     echo "`date +"%D %T"` Run ${timestamp} with ${model} started! Scheduling next run in 8h30m..."
-    sleep 8h
-    sleep 30m
+    sleep 7h
 
   done
 }

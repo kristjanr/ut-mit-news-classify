@@ -2,7 +2,7 @@ import gzip
 import pickle
 import random
 import csv
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MultiLabelBinarizer
 import numpy as np
 import csv
@@ -22,10 +22,12 @@ print_f('All imports seem good!')
 
 seed = 42
 
-n_chunks = 25
-
+chunk_size = 50_000
 train_size = None
 test_size = None
+output_dir = 'vectorized-fixed'
+
+os.makedirs(output_dir, exist_ok=True)
 
 # print_f('Downloading mitwnewsclassify stuff...')
 # download.download('tfidf')
@@ -34,7 +36,8 @@ test_size = None
 # print_f('Flushing the buffer to let logs from package appear...')
 # sys.stdout.flush()
 
-class GPTEmbeddedDataset(Dataset):
+
+class EmbeddedDataset(Dataset):
     def __init__(self, X, y):
         self.X = X
         self.y = y
@@ -84,10 +87,12 @@ with gzip.open('../data/NYTcorpus_test.p.gz', mode='r') as f:
 
 print_f('Data loaded.')
 
-# shuffle just in case the test and train data were not shuffled before - 
-# we will only measure model's accuracy on a few thousand samples
-random.Random(seed).shuffle(train_data)
-random.Random(seed).shuffle(test_data)
+# NOTE: we don't shuffle at this stage anymore (thanks Kristjan!)
+#
+# # shuffle just in case the test and train data were not shuffled before - 
+# # we will only measure model's accuracy on a few thousand samples
+# random.Random(seed).shuffle(train_data)
+# random.Random(seed).shuffle(test_data)
 
 # train and test data labels are coded in numbers,
 # but the models predict human-readable labels,
@@ -105,7 +110,6 @@ test_articles = [d[2] for d in test_data]
 train_labels_lists = [list(map(tags_dict.get, d[3:])) for d in train_data]
 test_labels_lists = [list(map(tags_dict.get, d[3:])) for d in test_data]
 
-
 X_train, y_train = train_articles[:train_size], train_labels_lists[:train_size]
 X_test, y_test = test_articles[:test_size], test_labels_lists[:test_size]
 
@@ -114,55 +118,44 @@ print_f('y_train', len(y_train))
 print_f('X_test', len(X_test))
 print_f('y_test', len(y_test))
 
-runs = [(X_train, y_train, 'embedded/embedded_train_FULL_tfidf'), (X_test, y_test, 'embedded/embedded_test_FULL_tfidf')]
+runs = [(X_train, y_train, f'{output_dir}/embedded_train_FULL_tfidf'), (X_test, y_test, f'{output_dir}/embedded_test_FULL_tfidf')]
 
 for X, y, output_path in runs:
+    total_chunks = len(X) // chunk_size + 1
+    print_f('total chunks', total_chunks)
 
-    # skip already embedded articles
-    chunk_paths = sorted([chunk_path for chunk_path in os.listdir('.') if f'{output_path}_chunk' in chunk_path])
-    skip_n_chunks = len(chunk_paths)
+    dataset = EmbeddedDataset(X, y)
+    iterator = DataLoader(dataset, batch_size=chunk_size)
 
-    print_f('Chunks processed already:', skip_n_chunks)
+    for chunk_id, chunk in tqdm(iterator):
+        X_chunk, y_chunk, idx_chunk = chunk
 
-    split_indices = np.array_split(np.arange(len(X)), n_chunks)
+        chunk_path = f'{output_path}_chunk{chunk_id+1}of{total_chunks}.pt'
+        print_f(f'Vectorizing chunk: ', chunk_path)
+        print_f('Chunk size:', len(X_chunk))
 
-    print_f(f'Splitting into {len(split_indices)} chunks')
+        start = time.time()
+        # tfidf_vec = tfidf.getfeatures(X_chunk)
+        # tfidf_bi_vec = tfidf_bi.getfeatures(X_chunk)
+        # X_embedded = np.concatenate((tfidf_vec, tfidf_bi_vec), axis=1)
+        y_embedded = mlb.transform(y_chunk)
 
-    for i, indices in enumerate(split_indices):
+        # saved_dataset = EmbeddedDataset(torch.tensor(X_embedded), torch.tensor(y_embedded))
+        # torch.save(saved_dataset, chunk_path, pickle_protocol=4)
 
-      if i < skip_n_chunks:
-        continue
+        print_f(f'Time taken: {int(time.time() - start)/60:.1f}min')
 
-      chunk_path = f'{output_path}_chunk{i+1}of{len(split_indices)}.pt'
-      print_f(f'Preprocessing dataset for ', chunk_path)
+        print_f()
 
-      X_chunk = X[indices[0]:indices[-1]]
-      y_chunk = y[indices[0]:indices[-1]]
+        # del tfidf_vec
+        # del tfidf_bi_vec
+        # del X_embedded
+        # del y_embedded
+        # del saved_dataset
+        gc.collect()
 
-      print('Chunk size:', len(X_chunk))
-
-      start = time.time()
-      tfidf_vec = tfidf.getfeatures(X_chunk)
-      tfidf_bi_vec = tfidf_bi.getfeatures(X_chunk)
-      X_embedded = np.concatenate((tfidf_vec, tfidf_bi_vec), axis=1)
-
-      y_embedded = mlb.transform(y_chunk)
-
-      saved_dataset = GPTEmbeddedDataset(torch.tensor(X_embedded), torch.tensor(y_embedded))
-      torch.save(saved_dataset, chunk_path, pickle_protocol=4)
-
-      print_f(f'Time taken: {int(time.time() - start)/60:.1f}min')
-
-      print_f()
-
-      del tfidf_vec
-      del tfidf_bi_vec
-      del X_embedded
-      del y_embedded
-      del saved_dataset
-      gc.collect()
-
-    del split_indices
+    del dataset
+    del iterator
     gc.collect()
 
 
