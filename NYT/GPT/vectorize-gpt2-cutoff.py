@@ -22,7 +22,7 @@ MODEL = 'gpt2'
 batch_size = 16
 
 # change this for each chunk
-NR = 2
+NR = 3
 cutoff_end_chars = True 
 
 

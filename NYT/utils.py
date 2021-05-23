@@ -31,6 +31,28 @@ class GPTVectorizedDataset(Dataset):
         return self.X[idx], self.y[idx], idx
 
 
+class GPTTokenizedDatasetWithoutLabels(Dataset):
+    def __init__(self, articles, tokenizer):
+
+        self.tokenizer = tokenizer
+        
+        print_f('GPTTokenizedDataset init - tokenizing...')
+        articles = tokenizer(articles, add_special_tokens=True, padding="max_length", truncation=True,
+                                       max_length=1024, return_tensors="pt", return_attention_mask=True)
+        
+        self.input_ids = articles['input_ids']
+        self.attention_mask = articles['attention_mask']
+        del articles
+        gc.collect()
+        print_f('GPTTokenizedDataset init - tokenizing done.')
+        
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.attention_mask[idx], None
+
+    
 class GPTTokenizedDataset(Dataset):
     def __init__(self, articles, labels, tokenizer):
 
@@ -58,6 +80,29 @@ class GPTTokenizedDataset(Dataset):
     def __getitem__(self, idx):
         # return self.articles[idx], self.labels[idx]
         return self.input_ids[idx], self.attention_mask[idx], self.labels[idx]
+
+    
+def load_nyt_articles(path, min_len=None, cutoff_tags=False):
+    with gzip.open(path, mode='r') as f:
+        data = pickle.load(f)
+    print_f(f'Data loaded from {path}')
+
+    # extract actual article texts from data samples
+    articles = [d[2] for d in data]
+    del data
+    gc.collect()
+    
+    filtered_indices = range(len(articles))
+    if min_len is not None:
+        filtered_indices = [i for i, article in enumerate(articles) if len(article) >= min_len]
+        articles = [articles[i] for i in filtered_indices]
+        print_f('Articles after filtering:', len(articles))
+
+    if cutoff_tags:
+        articles = [remove_tags(a) for a in articles]
+        
+    gc.collect()
+    return articles, filtered_indices
 
 
 def load_nyt_data(min_len=None, cutoff_tags=False):

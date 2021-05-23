@@ -2,7 +2,7 @@
 
 # Job Details
 #SBATCH --partition=gpu
-#SBATCH -J gpt-v-2
+#SBATCH -J gpt-v-3
 
 # Resources
 #SBATCH -t 06:45:00
