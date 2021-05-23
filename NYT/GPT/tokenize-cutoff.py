@@ -22,7 +22,7 @@ print_f('Using device:', device)
 TOTAL_NR_OF_CHUNKS = 4
 
 ## change this for each chunk
-NR = 3
+NR = 4
 
 ## change this for non-cutoff data
 cutoff_end_chars = True 
