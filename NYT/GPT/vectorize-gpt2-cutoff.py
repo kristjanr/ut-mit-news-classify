@@ -5,7 +5,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 from torch.utils.data import DataLoader
 import torch
-import os
+import gc
 from tqdm.auto import tqdm
 from utils import print_f, GPTVectorizedDataset
 from transformers import GPT2Model
@@ -20,10 +20,9 @@ tic = time.perf_counter()
 
 MODEL = 'gpt2'
 batch_size = 16
-chunk_size = 200_000
 
 # change this for each chunk
-NR = 1
+NR = 2
 cutoff_end_chars = True 
 
 
@@ -48,28 +47,19 @@ for filename in filenames:
 tokenized_train_path = tokenized_directory + tokenized_train_filename
 tokenized_test_path = tokenized_directory + tokenized_test_filename
 
-print_f('Loading tokenized dataset...')
-
-train_dataset = torch.load(tokenized_train_path)
-print_f(f'Loaded {tokenized_train_path}')
-
-test_dataset = torch.load(tokenized_test_path)
-print_f(f'Loaded {tokenized_test_path}')
-
-
 os.makedirs('vectorized', exist_ok=True)
 
 vectorized_train_path = f'/gpfs/space/projects/stud_nlp_share/cutoff/GPT/vectorized/{tokenized_train_filename}'
 vectorized_test_path = f'/gpfs/space/projects/stud_nlp_share/cutoff/GPT/vectorized/{tokenized_test_filename}'
 
 # start actual vectorization with GPT2
-runs = [(train_dataset, vectorized_train_path), (test_dataset, vectorized_test_path)]
+runs = [(tokenized_train_path, vectorized_train_path), (tokenized_test_path, vectorized_test_path)]
 
 print_f('Loading model...')
 model = GPT2Model.from_pretrained(MODEL)
 
 # resize model embedding to match new tokenizer
-model.resize_token_embeddings(len(test_dataset.tokenizer))
+model.resize_token_embeddings(len(torch.load(tokenized_test_path).tokenizer))
 
 # fix model padding token id
 model.config.pad_token_id = model.config.eos_token_id
@@ -77,49 +67,18 @@ model.config.pad_token_id = model.config.eos_token_id
 # Load model to defined device.
 model.to(device)
 
-for dataset, output_path in runs:
-
-    total_chunks = len(dataset) // chunk_size + 1
-    print_f('total chunks', total_chunks)
-
-    # skip already embedded articles
-    skip_n_articles = 0
-    chunk_paths = sorted([chunk_path for chunk_path in os.listdir('.') if f'{output_path}_chunk' in chunk_path])
-
-    print_f('chunks', chunk_paths)
-
-    if len(chunk_paths) > 0:
-        for i, chunk_path in enumerate(chunk_paths):
-            chunk = torch.load(chunk_path)
-
-            skip_n_articles += len(chunk)
-            print_f(f'Chunk at "{chunk_path}" has {len(chunk)} articles.')
-
-            del chunk
-            gc.collect()
-
-        print_f('skip:', skip_n_articles)
-
-        if skip_n_articles >= len(dataset):
-            print_f('Looks like the dataset if fully embedded already. Skipping this dataset...')
-            continue
-
-        print_f('dataset original', len(dataset))
-
-        dataset.input_ids = dataset.input_ids[skip_n_articles:]
-        dataset.attention_mask = dataset.attention_mask[skip_n_articles:]
-        dataset.labels = dataset.labels[skip_n_articles:]
-
-        print_f('dataset after skipping', len(dataset))
-
+for dataset_path, output_path in runs:
+    
+    print_f('Loading tokenized dataset...')
+    dataset = torch.load(dataset_path)
+    print_f(f'Loaded {dataset_path}')
+    
     iterator = DataLoader(dataset, batch_size=batch_size)
     print_f('Vectorizing dataset for ', output_path)
 
     X_train = []
     y_train = []
-    chunk_id = len(chunk_paths) + 1
-
-    print_f('Starting at chunk id', chunk_id)
+    gc.collect()
 
     for i, batch in enumerate(tqdm(iterator)):
         inputs, attention_mask, labels = batch
@@ -143,20 +102,17 @@ for dataset, output_path in runs:
 
         X_train += embeddings.detach().cpu()
         y_train += labels.detach().cpu()
+        del output
+        del embeddings
+        gc.collect()
 
-        if len(X_train) >= chunk_size:
-            print_f('Saving chunk:', output_path)
-            saved_dataset = GPTVectorizedDataset(torch.stack(X_train), torch.stack(y_train))
-            torch.save(saved_dataset, output_path, pickle_protocol=4)
-            X_train = []
-            y_train = []
-            chunk_id += 1
-
-    # take care of what's left after loop
-    if len(X_train) >= 0:
-        print_f('Saving chunk:', output_path)
-        saved_dataset = GPTVectorizedDataset(torch.stack(X_train), torch.stack(y_train))
-        torch.save(saved_dataset, output_path, pickle_protocol=4)
-
+    print_f('Saving:', output_path)
+    saved_dataset = GPTVectorizedDataset(torch.stack(X_train), torch.stack(y_train))
+    torch.save(saved_dataset, output_path, pickle_protocol=4)
+    del saved_dataset           
+    del embeddings
+    del dataset
+    gc.collect()
+    
 toc = time.perf_counter()
 print_f(f'Done in {toc - tic:0.4f} seconds!')

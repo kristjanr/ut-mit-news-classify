@@ -22,7 +22,7 @@ print_f('Using device:', device)
 TOTAL_NR_OF_CHUNKS = 4
 
 ## change this for each chunk
-NR = 4
+NR = 3
 
 ## change this for non-cutoff data
 cutoff_end_chars = True 
@@ -76,12 +76,19 @@ tic = time.perf_counter()
 if not os.path.exists(train_path):
     print_f('Tokenizing train dataset...')
     train_dataset = GPTTokenizedDataset(train_articles, train_labels_lists, tokenizer)
+    del train_articles
+    gc.collect()
     
     print_f('Saving tokenized dataset...')
     torch.save(train_dataset, train_path, pickle_protocol=4)
+    
+    del train_dataset
+    gc.collect()
+    
 else:
     print_f('Found tokenized training set...')
     train_dataset = torch.load(train_path)
+
 
 
 if not os.path.exists(test_path):
@@ -93,6 +100,7 @@ if not os.path.exists(test_path):
 else:
     print_f('Found tokenized training set...')
     test_dataset = torch.load(test_path)
+
 
 toc = time.perf_counter()
 print_f(f'Done tokenization part in {toc - tic:0.4f} seconds!')

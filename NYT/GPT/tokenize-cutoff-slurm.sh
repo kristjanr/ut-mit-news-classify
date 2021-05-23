@@ -2,12 +2,12 @@
 
 # Job Details
 #SBATCH --partition=gpu
-#SBATCH -J gpt-t-4
+#SBATCH -J gpt-t-3
 
 # Resources
-#SBATCH -t 00:45:00
+#SBATCH -t 00:59:00
 #SBATCH --ntasks=1
-#SBATCH --mem=40G
+#SBATCH --mem=60G
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:tesla:1
 #SBATCH -o /gpfs/space/home/roosild/.slurm/log-%j.out # STDOUT
