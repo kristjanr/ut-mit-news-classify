@@ -180,16 +180,17 @@ def load_label_map(out2id_path, id2label_path):
     return out2label
 
 
-out2label = load_label_map('/gpfs/space/projects/stud_nlp_share/data/labels_dict_gpt.csv', '/gpfs/space/projects/stud_nlp_share/data/nyt-theme-tags.csv')
-mlb = MultiLabelBinarizer(classes=out2label)
-mlb.fit(out2label)
-
-
 def labels2vec(labels):
+    out2label = load_label_map('/gpfs/space/projects/stud_nlp_share/data/labels_dict_gpt.csv', '/gpfs/space/projects/stud_nlp_share/data/nyt-theme-tags.csv')
+    mlb = MultiLabelBinarizer(classes=out2label)
+    mlb.fit(out2label)
     return mlb.transform(labels).astype('uint8')
 
 
 def vec2labels(vec):
+    out2label = load_label_map('/gpfs/space/projects/stud_nlp_share/data/labels_dict_gpt.csv', '/gpfs/space/projects/stud_nlp_share/data/nyt-theme-tags.csv')
+    mlb = MultiLabelBinarizer(classes=out2label)
+    mlb.fit(out2label)
     return mlb.inverse_transform(vec)
 
 
