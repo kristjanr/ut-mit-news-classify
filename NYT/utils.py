@@ -1,7 +1,7 @@
 import csv
 import pickle
 import gzip
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 import re
 from collections import Counter
 import gc
@@ -17,6 +17,18 @@ def print_f(*args):
 
 def remove_tags(text, end_start=-100):
     return text[:end_start] + re.sub(capital_tag_pattern, '', text[end_start:])
+
+
+class MyDataset(IterableDataset):
+    def __init__(self, X):
+        self.X = X
+
+    def __len__(self):
+        return len(self.X)
+
+    def __iter__(self):
+        for x in self.X:
+            yield x
 
 
 class GPTVectorizedDataset(Dataset):
