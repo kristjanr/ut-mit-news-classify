@@ -11,6 +11,7 @@ import pickle
 import os
 import gc
 import sys
+import random
 
 def print_f(*args):
     print(*args, flush=True)
@@ -20,6 +21,7 @@ print_f('All imports seem good!')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print_f('Using device:', device)
 
+seed = 42
 # tokenizing
 train_size = None  # None for full dataset
 test_size = None  # None for full dataset
@@ -33,9 +35,9 @@ print('args', sys.argv)
 
 MODEL = sys.argv[1] if len(sys.argv) >= 2 else 'gpt2'
 batch_size = 8
-chunk_size = int(sys.argv[2]) if len(sys.argv) >= 3 else 10_000
+chunk_size = int(sys.argv[2]) if len(sys.argv) >= 3 else 5_000
 
-print_f(f'Model: {MODEL} | Chunk size: {chunk_size} | Train limit: {train_size} | Test limit: {test_size} | Seed: no shuffling')
+print_f(f'Model: {MODEL} | Chunk size: {chunk_size} | Train limit: {train_size} | Test limit: {test_size} | Seed: {seed}')
 
 
 class GPTEmbeddedDataset(Dataset):
@@ -123,7 +125,7 @@ if not os.path.exists(tokenized_train_path):
         train_data = pickle.load(f)
     print_f('Data loaded.')
 
-    # random.Random(seed).shuffle(train_data)  # NOTE: no shufflling
+    random.Random(seed).shuffle(train_data)
     # extract actual article texts from data samples
     train_articles = [d[2][:cutoff_end_chars] for d in train_data] 
     # map the number-coded labels to human-readable labels
@@ -146,7 +148,7 @@ if not os.path.exists(tokenized_test_path):
         test_data = pickle.load(f)
     print_f('Data loaded.')
     
-    # random.Random(seed).shuffle(test_data)  # NOTE: no shufflling
+    random.Random(seed).shuffle(test_data)
     # extract actual article texts from data samples
     test_articles = [d[2][:cutoff_end_chars] for d in test_data]
     # map the number-coded labels to human-readable labels
@@ -163,7 +165,7 @@ else:
 
 
 # start actual vectorization with GPT2
-runs = [(train_dataset, f'embedded_train_FULL_{MODEL.replace("-", "_")}'), (test_dataset, f'embedded_test_FULL_{MODEL.replace("-", "_")}')]
+runs = [(train_dataset, f'vectorized-matrix/embedded_matrix_train_FULL_{MODEL.replace("-", "_")}'), (test_dataset, f'vectorized-matrix/embedded_matrix_test_FULL_{MODEL.replace("-", "_")}')]
 
 print_f('Loading model...')
 model = GPT2Model.from_pretrained(MODEL)
@@ -201,7 +203,7 @@ for dataset, output_path in runs:
         print_f('skip:', skip_n_articles)
 
         if skip_n_articles >= len(dataset):
-            print_f('Looks like the dataset if fully embedded already. Skipping this dataset...')
+            print_f('Looks like the dataset is fully embedded already. Skipping this dataset...')
             continue
 
         print_f('dataset original', len(dataset))
@@ -233,13 +235,7 @@ for dataset, output_path in runs:
         with torch.no_grad():
             output = model(input_ids=inputs, attention_mask=attention_mask)
 
-        output = output[0]
-
-        # indices of last non-padded elements in each sequence
-        # adopted from https://github.com/huggingface/transformers/blob/master/src/transformers/models/gpt2/modeling_gpt2.py#L1290-L1302
-        last_non_padded_ids = torch.ne(inputs, test_dataset.tokenizer.pad_token_id).sum(-1) - 1
-
-        embeddings = output[range(real_batch_size), last_non_padded_ids, :]
+        embeddings = output[0] # (batch_size, window_size, hidden_dim), e.g. (8, 1024, 768)
 
         X_train += embeddings.detach().cpu()
         y_train += labels.detach().cpu()
@@ -248,14 +244,24 @@ for dataset, output_path in runs:
             print_f(f'Saving chunk: {output_path}_chunk{chunk_id}of{total_chunks}.pt')
             saved_dataset = GPTEmbeddedDataset(torch.stack(X_train), torch.stack(y_train))
             torch.save(saved_dataset, f'{output_path}_chunk{chunk_id}of{total_chunks}.pt', pickle_protocol=4)
+            chunk_id += 1
+
+            del saved_dataset
+            del X_train
+            del y_train
+            gc.collect()
             X_train = []
             y_train = []
-            chunk_id += 1
 
     # take care of what's left after loop
     if len(X_train) >= 0:
         print_f(f'Saving chunk: {output_path}_chunk{chunk_id}of{total_chunks}.pt')
         saved_dataset = GPTEmbeddedDataset(torch.stack(X_train), torch.stack(y_train))
         torch.save(saved_dataset, f'{output_path}_chunk{chunk_id}of{total_chunks}.pt', pickle_protocol=4)
+
+        del saved_dataset
+        del X_train
+        del y_train
+        gc.collect()
   
 print_f('All done!')
